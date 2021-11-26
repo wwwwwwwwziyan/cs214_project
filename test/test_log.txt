@@ -1,3 +1,19 @@
-select column1 as c1, column2 as c2 
-from table 
-where column1 = 'value'
+select
+   product_id, period,
+   count(star_rating) as total_rating,
+   max(star_rating) as best_rating,
+   min(star_rating) as worst_rating 
+from
+   tbl_books 
+where
+   verified_purchase = 'y' 
+   and review_date between '1995-07-22' and '2015-08-31' 
+   and marketplace in 
+   (
+      'de','us','uk','fr','jp' 
+   )
+having
+    total_rating > 5
+group by
+   product_id, period
+limit 10

@@ -15,13 +15,13 @@ reorder SELECT, FROM ... by the order of
 FROM > WHERE > GROUP BY > AGG > HAVING > SELECT
 Input: a SQL query, str
 Output: components, List of tuples
-    components[i][0]: one of ('from', 'where', 'group', 'agg', 'having', 'select')
+    components[i][0]: one of ('from', 'where', 'group', 'agg', 'having', 'select', 'order', 'limit')
     components[i][1]: details of the components, List
 '''
 def parsing(query):
-    precedence = {'from': 1, 'where': 2, 'group': 3, 'agg': 4, 'having': 5, 'select': 6}
+    precedence = {'from': 1, 'where': 2, 'group': 3, 'agg': 4, 'having': 5, 'select': 6, 'order': 7, 'limit': 8}
     #split words and punctuation
-    words = re.findall(r"[\w']+|[,)(=]", query)
+    words = re.findall(r"[-\w']+|[,)(=<>]", query)
 
     components = []
     curr = []
@@ -37,7 +37,7 @@ def parsing(query):
     components.append((curr[0], curr))
     components.sort(key=lambda x: precedence[x[0]])
     
-    print(components)
+    #print(components)
     return components
 
 '''
@@ -49,6 +49,8 @@ Input: components, List of tuples
 Output: PySpark code, str
 '''
 def translate_components(parsed_query):
+    agg_func = set(['max','min','count','avg'])
+
     ret = ''
     for component in parsed_query:
         if component[0] == 'from':
@@ -56,26 +58,59 @@ def translate_components(parsed_query):
         elif component[0] == 'where':
             ret += '.filter("' + ' '.join(component[1][1:]) + '")'
         elif component[0] == 'group':
-            continue
+            ret += '.groupBy("' + ' '.join(component[1][2:]) + '")'
         elif component[0] == 'agg':
-            continue
+            to_add = '.agg('
+            add_flag = 0
+            i = 1
+            while i < len(component[1]):
+                curr_word = component[1][i]
+                if curr_word in agg_func:
+                    add_flag = 1
+                    to_add += curr_word + '(col(' + component[1][i+2] + '))' + '.alias("' + component[1][i+5] +'"),'
+                    i += 5
+                i += 1
+
+            to_add = to_add[:-1]
+            print()
+            to_add += ')'
+            if add_flag == 1:
+                ret += to_add
         elif component[0] == 'having':
-            continue
+            ret += '.filter("' + ' '.join(component[1][1:]) + '")'
         elif component[0] == 'select':
+            agg_flag = 0
             ret += '.select('
             i = 1
             while i < len(component[1]):
                 curr_word = component[1][i]
-                if curr_word == 'as':
-                    ret += '.alias("{}")'.format(component[1][i+1])
-                    i += 2
+                
+                if curr_word in agg_func:
+                    agg_flag = 1
+                    i += 1
+
+                elif curr_word == 'as':
+                    if agg_flag:
+                        agg_flag = 0
+                        i += 1
+                    else:
+                        ret += '.alias("{}"), '.format(component[1][i+1])
+                        i += 2
                 elif curr_word == ',':
                     ret += ', '
                     i += 1
+                elif curr_word != '(' and curr_word != ')':
+                    if agg_flag == 0:
+                        ret += '"{}"'.format(curr_word)
+                    i += 1
                 else:
-                    ret += '"{}"'.format(curr_word)
                     i += 1
 
             ret += ')'
+        elif component[0] == 'order':
+            # need to be implemented
+            continue
+        elif component[0] == 'limit':
+            ret += '.limit(' + component[1][1] + ')'
 
     return ret
