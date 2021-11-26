@@ -1,6 +1,14 @@
+import re
+
+'''
+Translate a SQL query (without subquery and join) into Pyspark code
+Input: SQL query, str
+Output: Pyspark code, str
+'''
 def translate(query):
     parse = parsing(query)
-    return parse
+    full_code = translate_components(parse)
+    return full_code
 
 '''
 reorder SELECT, FROM ... by the order of 
@@ -12,8 +20,9 @@ Output: components, List of tuples
 '''
 def parsing(query):
     precedence = {'from': 1, 'where': 2, 'group': 3, 'agg': 4, 'having': 5, 'select': 6}
-    words = query.split()
-    
+    #split words and punctuation
+    words = re.findall(r"[\w']+|[,)(=]", query)
+
     components = []
     curr = []
     for word in words:
@@ -28,6 +37,7 @@ def parsing(query):
     components.append((curr[0], curr))
     components.sort(key=lambda x: precedence[x[0]])
     
+    print(components)
     return components
 
 '''
@@ -42,9 +52,9 @@ def translate_components(parsed_query):
     ret = ''
     for component in parsed_query:
         if component[0] == 'from':
-            continue
+            ret += component[1][1]
         elif component[0] == 'where':
-            continue
+            ret += '.filter("' + ' '.join(component[1][1:]) + '")'
         elif component[0] == 'group':
             continue
         elif component[0] == 'agg':
@@ -52,4 +62,20 @@ def translate_components(parsed_query):
         elif component[0] == 'having':
             continue
         elif component[0] == 'select':
-            continue
+            ret += '.select('
+            i = 1
+            while i < len(component[1]):
+                curr_word = component[1][i]
+                if curr_word == 'as':
+                    ret += '.alias("{}")'.format(component[1][i+1])
+                    i += 2
+                elif curr_word == ',':
+                    ret += ', '
+                    i += 1
+                else:
+                    ret += '"{}"'.format(curr_word)
+                    i += 1
+
+            ret += ')'
+
+    return ret

@@ -4,6 +4,8 @@ def read_file(filename):
         for line in f.readlines():
             ret += line
     ret.replace('\n',' ')
+
+    #lower all characters and split the punctuation
     return ret.lower()
 
 def write_output(filename, content):
