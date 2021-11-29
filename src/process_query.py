@@ -58,8 +58,24 @@ class lmt(stmt):
 
 agg_func = set(['max','min','count','avg'])
 
+stmt_dict = {'select':sel, 'from':frm, 'where':whr, 'group':grp, 'having':hav, 'limit':lmt}
+
+stmt_set = set(stmt_dict.keys())
+
+boolean = ['and', 'or', 'not']
+
+others = ['by', 'as', 'in']
+
+def keyword_lower(token):
+    lower = token.lower()
+    if lower in agg_func.union(stmt_set, boolean, others):
+        return lower
+    return token
+
+
 def Pass1(query):
     tokens = re.findall(r"[-\w']+|[*.,)(=<>]", query)
+    tokens = [keyword_lower(tok) for tok in tokens]
     stack = [[]]
     for tok in tokens:
         if tok == '(':

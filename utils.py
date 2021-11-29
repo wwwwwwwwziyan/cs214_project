@@ -5,7 +5,7 @@ def read_file(filename):
             ret += line
     ret.replace('\n',' ')
 
-    return ret.lower()
+    return ret
 
 def write_output(filename, content):
     with open(filename, 'w') as f:

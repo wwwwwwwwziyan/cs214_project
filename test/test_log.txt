@@ -1,18 +1,18 @@
-select
-   product_id, t.a as u
-   count(star_rating) as total_rating
-from
-   tbl_books, (select * from q where q.c < 100) as t
-where
-   verified_purchase = 'y' 
-   and review_date between '1995-07-22' and '2015-08-31' 
-   and marketplace in 
+SELECT
+   product_id, T.a AS u
+   Count(star_rating) AS total_rating
+FROM
+   tbl_books, (SELECT * FROM Q WHERE Q.c < 100) AS T
+WHERE
+   verified_purchase = 'Y' 
+   AND review_date BETWEEN '1995-07-22' AND '2015-08-31' 
+   AND marketplace IN 
    (
-      select a.a, b.b
-			from a, b
-			where a.c < b.c
+      select A.a, B.b
+			from A, B
+			where A.c < B.c
    )
-having
+HAVING
     total_rating > 5
-group by
+GROUP BY
    product_id, period
