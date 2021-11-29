@@ -1,19 +1,18 @@
 select
-   product_id, period,
-   count(star_rating) as total_rating,
-   max(star_rating) as best_rating,
-   min(star_rating) as worst_rating 
+   product_id, t.a as u
+   count(star_rating) as total_rating
 from
-   tbl_books 
+   tbl_books, (select * from q where q.c < 100) as t
 where
    verified_purchase = 'y' 
    and review_date between '1995-07-22' and '2015-08-31' 
    and marketplace in 
    (
-      'de','us','uk','fr','jp' 
+      select a.a, b.b
+			from a, b
+			where a.c < b.c
    )
 having
     total_rating > 5
 group by
    product_id, period
-limit 10

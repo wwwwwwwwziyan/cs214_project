@@ -1,24 +1,5 @@
 import re
 
-'''
-Translate a SQL query (without subquery and join) into Pyspark code
-Input: SQL query, str
-Output: Pyspark code, str
-'''
-def translate(query):
-    parse = parsing(query)
-    full_code = translate_components(parse)
-    return full_code
-
-'''
-reorder SELECT, FROM ... by the order of 
-FROM > WHERE > GROUP BY > AGG > HAVING > SELECT
-Input: a SQL query, str
-Output: components, List of tuples
-    components[i][0]: one of ('from', 'where', 'group', 'agg', 'having', 'select', 'order', 'limit')
-    components[i][1]: details of the components, List
-'''
-
 class struc:
     def __str__(self):
         strs = [str(y) for x, y in vars(self).items()]
@@ -36,6 +17,8 @@ class als(struc):
         self.val = val
         self.alias = alias
 
+    def update(self, val):
+        self.val = val
 
 class agg(struc):
     def __init__(self, typ):
@@ -51,6 +34,9 @@ class stmt(struc):
 
     def add(self, val):
         self.vals.append(val)
+    
+    def update(self, idx, val):
+        self.vals[idx] = val
 
 class sel(stmt):
     pass
@@ -73,7 +59,7 @@ class lmt(stmt):
 agg_func = set(['max','min','count','avg'])
 
 def Pass1(query):
-    tokens = re.findall(r"[-\w']+|[.,)(=<>]", query)
+    tokens = re.findall(r"[-\w']+|[*.,)(=<>]", query)
     stack = [[]]
     for tok in tokens:
         if tok == '(':
@@ -98,11 +84,9 @@ def Pass1(query):
             pass
         else:
             stack[-1].append(tok)
-    print(stack[0])
     return stack[0]
 
 def Pass2(x):
-    print(x)
     if isinstance(x, list):
         xs = x
         stack = []
@@ -133,3 +117,34 @@ def Pass2(x):
     else:
         ret = x
     return ret
+
+
+def Pass3(x):
+    tag_idx = 0
+    flatten = {}
+    def tag():
+        nonlocal tag_idx
+        tag_idx += 1
+        return 'tmp_' + str(tag_idx)
+    
+    def func(struc):
+        nonlocal flatten
+        if isinstance(struc, list) and isinstance(struc[0], sel):
+            ls = []
+            for sub_struc in struc:
+                sub_struc = func(sub_struc)
+                ls.append(sub_struc)
+            new_tag = tag()
+            flatten[new_tag] = ls
+            return new_tag
+        elif isinstance(struc, stmt):
+            for idx, val in enumerate(struc.vals):
+                struc.update(idx, func(val))
+            return struc
+        elif isinstance(struc, als):
+            struc.update(func(struc.val))
+            return struc
+        else:
+            return struc
+    func(x)
+    return flatten
