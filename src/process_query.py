@@ -1,4 +1,5 @@
 import re
+#from typing import List
 
 class struc:
     def __str__(self):
@@ -10,6 +11,9 @@ class ref(struc):
     def __init__(self, obj, attr):
         self.obj = obj
         self.attr = attr
+    
+    def process(self):
+        return str(self.obj) + '.' + str(self.attr)
 
 
 class als(struc):
@@ -19,6 +23,9 @@ class als(struc):
 
     def update(self, val):
         self.val = val
+    
+    def process(self):
+        return str(self.val) + '.alias(' + str(self.alias) + ')'
 
 class agg(struc):
     def __init__(self, typ):
@@ -38,27 +45,153 @@ class stmt(struc):
     def update(self, idx, val):
         self.vals[idx] = val
 
-class sel(stmt):
-    pass
-
 class frm(stmt):
-    pass
+    priority = 1
+
+    def process(self):
+        ret = str(self.vals[0])
+        i = 0
+        states = set(['inner','outer','left','right'])
+        join_state = ''
+        join_flag = 0
+        join_obj = ''
+        on_flag = 0
+        cond = []
+        for item in self.vals:
+            if isinstance(item, als) or isinstance(item, ref):
+                item2 = item.process()
+            else:
+                item2 = item
+            
+            if item2 in states:
+                join_state = item2
+            elif item2 == 'JOIN':
+                if join_flag:
+                    ret += '.join(' +join_obj + ' ' + ' '.join(cond) + join_state + ')'
+                join_flag = 1
+                on_flag = 0
+                cond = []
+            elif item2 == 'ON':
+                on_flag = 1
+            elif on_flag:
+                cond.append(item2)
+            else:
+                join_obj = item2
+            i += 1
+        
+        return ret
 
 class whr(stmt):
-    pass
+    priority = 2
 
-class hav(stmt):
-    pass
+    def process(self):
+        ret = '.filter('
+        for item in self.vals:
+            if isinstance(item, ref) or isinstance(item, als):
+                ret += item.process()
+            elif isinstance(item, list):
+                ret += '(' + ' '.join(item) + ')'
+            else:
+                ret += item + ' '
+        ret += ')'
+        return ret
 
 class grp(stmt):
-    pass
+    priority = 3
+
+    def process(self):
+        return '.groupBy("' + ' '.join(self.vals[1:]) + '")'
+
+class agg2(stmt):
+    priority = 4
+
+    def process(self):
+        ret = '.agg('
+        for item in self.vals:
+            if isinstance(item, agg):
+                item = als(item, str(item.typ) + '_' + str(item.val))
+
+            if isinstance(item, als):
+                if isinstance(item.val, agg):
+                    ret += '{}("{}").alias({})'.format(item.val.typ, item.val.val, item.val)
+            elif isinstance(item, agg):
+                
+                ret += '{}("{}").alias({})'.format(item.val.typ, item.val.val, item.val)
+        ret += ')'
+        if ret == '.agg()':
+            #nothing to aggregate
+            ret = '' 
+        return ret
+
+class hav(stmt):
+    priority = 5
+
+    def process(self):
+        ret = '.filter('
+        for item in self.vals:
+            if isinstance(item, ref) or isinstance(item, als):
+                ret += item.process()
+            elif isinstance(item, list):
+                ret += '(' + ' '.join(item) + ')'
+            else:
+                ret += item + ' '
+        ret += ')'
+        return ret
+
+class sel(stmt):
+    priority = 6
+
+    def process(self):
+        ret = '.select('
+        for item in self.vals:
+            if isinstance(item, agg):
+                item = als(item, str(item.typ) + '_' + str(item.val))
+
+            if isinstance(item, als):
+                if isinstance(item.val, agg):
+                    ret += '"{}", '.format(item.alias)
+                else:
+                    ret += item.process()
+            else:
+                ret += '"{}", '.format(item)
+        ret = ret[:-2]
+        ret += ')'
+        return ret
+
+class ord(stmt):
+    priority = 7
+
+    def process(self):
+        ret = '.orderBy('
+        ord_item = []
+        ascending = []
+        for item in self.vals[1:]:
+            if item != 'asc' or item != 'desc':
+                ord_item.append(item)
+                if len(ord_item) > len(ascending):
+                    ascending.append('asc')
+            else:
+                ascending.append(item)
+        
+        if len(ord_item) > len(ascending):
+            ascending.append(1)
+
+        for i in range(len(ord_item)):
+            ret += ascending[i] + '("' +  +'"), '
+        
+        ret = ret[:-2]
+        return ret
+                
 
 class lmt(stmt):
-    pass
+    priority = 8
+
+    def process(self):
+        return '.limit(' + self.vals[0] + ')'
 
 agg_func = set(['max','min','count','avg'])
 
-stmt_dict = {'select':sel, 'from':frm, 'where':whr, 'group':grp, 'having':hav, 'limit':lmt}
+stmt_dict = {'select':sel, 'from':frm, 'where':whr, 'group':grp, 'having':hav, 'order':ord, 'limit':lmt}
 
 stmt_set = set(stmt_dict.keys())
 
@@ -130,6 +263,8 @@ def Pass2(x):
         ret = grp()
     elif x == 'limit':
         ret = lmt()
+    elif x == 'order':
+        ret = ord()
     else:
         ret = x
     return ret
@@ -164,3 +299,30 @@ def Pass3(x):
             return struc
     func(x)
     return flatten
+
+def Pass4(query_dict):
+    ret = ''
+    for var in query_dict:
+        ret += var + '='
+
+        # process each statement
+        agg_stmt = agg2()
+        agg_stmt.add(query_dict[var])
+        query_dict[var].append(agg_stmt)
+        query_dict[var].sort(key=lambda x: x.priority)
+
+        for stmt in query_dict[var]:
+            ret += stmt.process()
+        
+        ret += '\n'
+
+    return ret
+
+def translate(query):
+    pass1 = Pass1(query)
+    pass2 = Pass2(pass1)
+    pass3 = Pass3(pass2)
+    pass4 = Pass4(pass3)
+    return pass4
+
+        
