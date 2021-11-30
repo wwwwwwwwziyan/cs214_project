@@ -8,9 +8,9 @@ def main():
     utils.write_log_and_console(config.log_file, 'Test SQL query:')
     utils.write_log_and_console(config.log_file, test_query)
     output = pq.translate(test_query)
+
+    print('\nOutput PySpark code:')
     print(output)
-    #print('\nOutput PySpark code:')
-    #print(output)
     #utils.write_log_and_console(config.log_file, '\nOutput PySpark code:')
     #utils.write_log_and_console(config.log_file, output)
     #utils.write_output(config.out_file, output)

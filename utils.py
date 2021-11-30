@@ -2,6 +2,9 @@ def read_file(filename):
     ret = ''
     with open(filename, 'r') as f:
         for line in f.readlines():
+            line2 = line.lstrip()
+            if len(line2) >= 2 and line2[:2] == '--':
+                continue
             ret += line
     ret.replace('\n',' ')
 

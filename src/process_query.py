@@ -25,7 +25,10 @@ class als(struc):
         self.val = val
     
     def process(self):
-        return str(self.val) + '.alias(' + str(self.alias) + ')'
+        if isinstance(self.val, ref):
+            return '"' + str(self.val.process()) + '".alias(' + str(self.alias) + ')'
+        else:
+            return str(self.val) + '.alias(' + str(self.alias) + ')'
 
 class agg(struc):
     def __init__(self, typ):
@@ -63,11 +66,11 @@ class frm(stmt):
             else:
                 item2 = item
             
-            if item2 in states:
-                join_state = item2
+            if item2.lower() in states:
+                join_state = item2.lower()
             elif item2 == 'JOIN':
                 if join_flag:
-                    ret += '.join(' +join_obj + ' ' + ' '.join(cond) + join_state + ')'
+                    ret += '.join(' +join_obj + ', ' + ' '.join(cond) + '"' +join_state + '")'
                 join_flag = 1
                 on_flag = 0
                 cond = []
@@ -79,6 +82,9 @@ class frm(stmt):
                 join_obj = item2
             i += 1
         
+        if join_flag:
+            ret += '.join(' +join_obj + ', ' + ' '.join(cond) + ', ' + join_state + ')'
+
         return ret
 
 class whr(stmt):
@@ -100,7 +106,14 @@ class grp(stmt):
     priority = 3
 
     def process(self):
-        return '.groupBy("' + ' '.join(self.vals[1:]) + '")'
+        ret = '.groupBy("'
+        for item in self.vals:
+            if isinstance(item, ref) or isinstance(item, als):
+                ret += item.process() + ' '
+            else:
+                ret += item + ' '
+        ret += '")'
+        return ret
 
 class agg2(stmt):
     priority = 4
@@ -115,7 +128,6 @@ class agg2(stmt):
                 if isinstance(item.val, agg):
                     ret += '{}("{}").alias({})'.format(item.val.typ, item.val.val, item.val)
             elif isinstance(item, agg):
-                
                 ret += '{}("{}").alias({})'.format(item.val.typ, item.val.val, item.val)
         ret += ')'
         if ret == '.agg()':
@@ -127,7 +139,7 @@ class hav(stmt):
     priority = 5
 
     def process(self):
-        ret = '.filter('
+        ret = '.filter("'
         for item in self.vals:
             if isinstance(item, ref) or isinstance(item, als):
                 ret += item.process()
@@ -135,7 +147,7 @@ class hav(stmt):
                 ret += '(' + ' '.join(item) + ')'
             else:
                 ret += item + ' '
-        ret += ')'
+        ret += '")'
         return ret
 
 class sel(stmt):
@@ -149,9 +161,11 @@ class sel(stmt):
 
             if isinstance(item, als):
                 if isinstance(item.val, agg):
-                    ret += '"{}", '.format(item.alias)
+                    ret += '{}, '.format(item.alias)
                 else:
-                    ret += item.process()
+                    ret += '{}, '.format(item.process())
+            elif isinstance(item, ref):
+                ret += '"{}", '.format(item.process())
             else:
                 ret += '"{}", '.format(item)
         ret = ret[:-2]
@@ -324,5 +338,3 @@ def translate(query):
     pass3 = Pass3(pass2)
     pass4 = Pass4(pass3)
     return pass4
-
-        
