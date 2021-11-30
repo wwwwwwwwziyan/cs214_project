@@ -161,7 +161,7 @@ class sel(stmt):
 
             if isinstance(item, als):
                 if isinstance(item.val, agg):
-                    ret += '{}, '.format(item.alias)
+                    ret += '"{}", '.format(item.alias)
                 else:
                     ret += '{}, '.format(item.process())
             elif isinstance(item, ref):
