@@ -211,6 +211,7 @@ class lmt(stmt):
 agg_func = set(['max','min','count','avg'])
 
 stmt_dict = {'select':sel, 'from':frm, 'where':whr, 'group':grp, 'having':hav, 'order':ord, 'limit':lmt}
+stmt_dict2 = {sel: 'select', frm: 'from', whr: 'where', grp:'group', hav:'having', ord: 'order', lmt: 'limit'}
 
 stmt_set = set(stmt_dict.keys())
 
@@ -319,7 +320,7 @@ def Pass3(x):
     func(x)
     return flatten
 
-def Pass4(query_dict):
+def Pass4(query_dict, mode):
     ret = ''
     change_var = {}
     #process alias of subquery
@@ -327,33 +328,86 @@ def Pass4(query_dict):
         for i in range(len(query_dict[var])):
             for j in range(len(query_dict[var][i].vals)):
                 item = query_dict[var][i].vals[j]
-                if isinstance(item, als) and item.val[:4] == 'tmp_':
+                if isinstance(item, als) and isinstance(item.val, list) and item.val[:4] == 'tmp_':
                     change_var[item.val] = item.alias
                     query_dict[var][i].vals[j] = item.alias
 
-    #print(change_var)
-    for var in query_dict:
-        if var in change_var:
-            ret += change_var[var] + '='
-        else:
-            ret += var + '='
+    if mode == 'd':
+        for var in query_dict:
+            if var in change_var:
+                ret += change_var[var] + '='
+            else:
+                ret += var + '='
 
-        # process each statement
-        agg_stmt = agg2()
-        agg_stmt.add(query_dict[var])
-        query_dict[var].append(agg_stmt)
-        query_dict[var].sort(key=lambda x: x.priority)
+            # process each statement
+            agg_stmt = agg2()
+            agg_stmt.add(query_dict[var])
+            query_dict[var].append(agg_stmt)
+            query_dict[var].sort(key=lambda x: x.priority)
 
-        for stmt in query_dict[var]:
-            ret += stmt.process()
-        
-        ret += '\n'
+            for stmt in query_dict[var]:
+                ret += stmt.process()
+            
+            ret += '\n'
+
+    elif mode == 's':
+        for var in query_dict:
+            if var in change_var:
+                ret += change_var[var] + '='
+            else:
+                ret += var + '='
+
+            ret += 'spark.sql("'
+            for stmt in query_dict[var]:
+                ret += stmt_dict2[type(stmt)] + ' '
+                if isinstance(stmt, grp) or isinstance(stmt, ord):
+                    stmt.vals = stmt.vals[1:]
+
+                if isinstance(stmt, sel) or isinstance(stmt, grp) or isinstance(stmt, ord):
+                    for word in stmt.vals:
+                        if isinstance(word, ref):
+                            ret += word.process()
+                        elif isinstance(word, als):
+                            if isinstance(word.val, ref):
+                                word.val = word.process()
+                            elif isinstance(word.val, agg):
+                                word.val = word.val.typ + '(' + word.val.val + ')'
+                            ret += word.val + ' as ' + word.alias
+                        elif isinstance(word, agg):
+                            ret += word.typ + '(' + word.val + ')'
+                        elif isinstance(word, list):
+                            ret += '('+' '.join(word)+')'
+                        else:
+                            ret += word
+                        ret += ', '
+                
+                    ret = ret[:-2] + ' '
+                
+                else:
+                    for word in stmt.vals:
+                        if isinstance(word, ref):
+                            ret += word.process()
+                        elif isinstance(word, als):
+                            if isinstance(word.val, ref):
+                                word.val = word.process()
+                            elif isinstance(word.val, agg):
+                                word.val = word.val.typ + '(' + word.val.val + ')'
+                            ret += word.val + ' as ' + word.alias
+                        elif isinstance(word, agg):
+                            ret += word.typ + '(' + word.val + ')'
+                        elif isinstance(word, list):
+                            ret += '('+' '.join(word)+')'
+                        else:
+                            ret += word
+                        ret += ' '
+            ret += '")\n'
+            
 
     return ret
 
-def translate(query):
+def translate(query, mode):
     pass1 = Pass1(query)
     pass2 = Pass2(pass1)
     pass3 = Pass3(pass2)
-    pass4 = Pass4(pass3)
+    pass4 = Pass4(pass3, mode)
     return pass4

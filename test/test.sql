@@ -14,7 +14,7 @@ WHERE
       'DE','US','UK','FR','JP' 
    )
 HAVING
-    total_rating > 5
+   total_rating > 5
 GROUP BY
    product_id, period
 LIMIT 10
