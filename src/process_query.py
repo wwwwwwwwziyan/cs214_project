@@ -52,10 +52,14 @@ class frm(stmt):
     priority = 1
 
     def process(self):
-        ret = str(self.vals[0])
+        ret = ''
+        if isinstance(self.vals[0], als) or isinstance(self.vals[0], ref):
+            ret += self.vals[0].process()
+        else:
+            ret += self.vals[0]
         i = 0
         states = set(['inner','outer','left','right'])
-        join_state = ''
+        join_state = 'INNER'
         join_flag = 0
         join_obj = ''
         on_flag = 0
@@ -70,7 +74,7 @@ class frm(stmt):
                 join_state = item2.lower()
             elif item2 == 'JOIN':
                 if join_flag:
-                    ret += '.join(' +join_obj + ', ' + ' '.join(cond) + '"' +join_state + '")'
+                    ret += '.join(' +join_obj + ', "' + ' '.join(cond) + '", "' +join_state + '")'
                 join_flag = 1
                 on_flag = 0
                 cond = []
@@ -80,6 +84,7 @@ class frm(stmt):
                 cond.append(item2)
             else:
                 join_obj = item2
+                #print(join_obj)
             i += 1
         
         if join_flag:
@@ -316,8 +321,22 @@ def Pass3(x):
 
 def Pass4(query_dict):
     ret = ''
+    change_var = {}
+    #process alias of subquery
     for var in query_dict:
-        ret += var + '='
+        for i in range(len(query_dict[var])):
+            for j in range(len(query_dict[var][i].vals)):
+                item = query_dict[var][i].vals[j]
+                if isinstance(item, als) and item.val[:4] == 'tmp_':
+                    change_var[item.val] = item.alias
+                    query_dict[var][i].vals[j] = item.alias
+
+    #print(change_var)
+    for var in query_dict:
+        if var in change_var:
+            ret += change_var[var] + '='
+        else:
+            ret += var + '='
 
         # process each statement
         agg_stmt = agg2()
