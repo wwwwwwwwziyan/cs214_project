@@ -88,7 +88,7 @@ class frm(stmt):
             i += 1
         
         if join_flag:
-            ret += '.join(' +join_obj + ', ' + ' '.join(cond) + ', ' + join_state + ')'
+            ret += '.join(' +join_obj + ', "' + ' '.join(cond) + '", "' +join_state + '")'
 
         return ret
 
@@ -328,7 +328,7 @@ def Pass4(query_dict, mode):
         for i in range(len(query_dict[var])):
             for j in range(len(query_dict[var][i].vals)):
                 item = query_dict[var][i].vals[j]
-                if isinstance(item, als) and isinstance(item.val, list) and item.val[:4] == 'tmp_':
+                if isinstance(item, als) and isinstance(item.val, str) and item.val[:4] == 'tmp_':
                     change_var[item.val] = item.alias
                     query_dict[var][i].vals[j] = item.alias
 
